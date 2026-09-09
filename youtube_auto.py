@@ -1,47 +1,34 @@
 import os
+import random
 import requests
 import urllib.parse
-import re  # Regex for filename detection
+import re
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 
 # ==========================================
-# 👇 STRICT CONFIGURATION (Education Mode) 👇
+# 👇 CONFIGURATION FOR FACTS CHANNEL 👇
 # ==========================================
 
-TOPIC_NAME = "Education_Motivation"
-
 CONFIG = {
-    # 1. Category Setting (STRICTLY Education)
+    # 27 = Education, 22 = People & Blogs
     "category_id": "27",  
     
-    # 2. AI Prompts (No Stars, No Hashtags in text)
-    "title_prompt": "Write a short viral science or fact-based video title in English under 60 characters.No hashtags. No quotes. No emoji.",
-    "desc_prompt": "Write a deep, educational and inspiring explanation (max 2 sentences) about the importance of success and learning. Plain text only. No stars. No hashtags inside text.",
+    # Title AI Prompt (Used only if title is a filename like VID_2024...)
+    "title_prompt": "Write a short viral amazing fact video title in English under 60 characters. No hashtags. No quotes. No emoji.",
     
-    # 3. SEO Settings (Science & Tech - USA Targeting)
-    "seo_hashtags": "#science #sciencevideo #learning #knowledge #sciencefacts #spacefacts #innovation #research #technology #scientificmind #stemeducation #physicsfacts #biologyfacts #chemistryfacts #dailyscience #curiosity #futuretech #scienceexplained #scienceshorts #ytshorts #Science #STEM #Learning #Discovery #SpaceScience #Innovation #Shorts #Facts #Science #ScienceVideo #Facts #Discovery #Knowledge #Learning #SpaceFacts #STEM #ScientificMind #PhysicsFacts #BiologyFacts #ChemistryFacts #Research #USA #USAScience #ViralUSA #EnglishContent #GlobalScience",
+    # SEO Settings
+    "seo_hashtags": "#facts #interestingfacts #amazingfacts #knowledge #factsdaily #sciencefacts #worldfacts #didyouknow #factshorts #ytshorts",
     
-    # 4. Tags List (Exact Mirror of Hashtags)
+    # Tags List
     "tags": [
-        "science", "sciencevideo", "learning", "knowledge", "sciencefacts", 
-        "spacefacts", "innovation", "research", "technology", "scientificmind", 
-        "stemeducation", "physicsfacts", "biologyfacts", "chemistryfacts", 
-        "dailyscience", "curiosity", "futuretech", "scienceexplained", 
-        "scienceshorts", "ytshorts", "Science", "STEM", "Learning", 
-        "Discovery", "SpaceScience", "Innovation", "Shorts", "Facts", 
-        "Science", "ScienceVideo", "Facts", "Discovery", "Knowledge", 
-        "Learning", "SpaceFacts", "STEM", "ScientificMind", "PhysicsFacts", 
-        "BiologyFacts", "ChemistryFacts", "Research", "USA", "USAScience", 
-        "ViralUSA", "EnglishContent", "GlobalScience"
+        "facts", "interesting facts", "amazing facts", "knowledge", "facts daily",
+        "did you know", "science facts", "world facts", "daily facts", "fact shorts",
+        "educational", "learning", "curiosity", "mind blowing facts", "shorts"
     ]
 }
 
-CHANNEL_CUSTOM_NAME = "My Education Channel"
-
-# ==========================================
-# 👆 CONFIGURATION END 👆
-# ==========================================
+CHANNEL_CUSTOM_NAME = "The Interesting Fact"
 
 def get_youtube_service():
     client_id = os.environ.get("YOUTUBE_CLIENT_ID")
@@ -60,51 +47,40 @@ def get_youtube_service():
     )
     return build("youtube", "v3", credentials=creds)
 
+def get_random_description():
+    """Reads description.txt and selects one random description block"""
+    try:
+        with open("description.txt", "r", encoding="utf-8") as file:
+            content = file.read()
+            # Split using '---' as the separator
+            descriptions = [d.strip() for d in content.split('---') if d.strip()]
+            if descriptions:
+                return random.choice(descriptions)
+    except FileNotFoundError:
+        print("Warning: description.txt not found. Using default description.")
+    
+    return "Welcome to our channel! Enjoy this amazing fact."
+
 def ask_pollinations_ai(prompt):
-    """AI se unique text generate karna"""
+    """Fallback for AI Title generation"""
     try:
         encoded_prompt = urllib.parse.quote(prompt)
         url = f"https://text.pollinations.ai/{encoded_prompt}?seed={os.urandom(4).hex()}"
         response = requests.get(url)
         if response.status_code == 200:
             return response.text.strip()
-        else:
-            return None
     except Exception as e:
         print(f"AI Error: {e}")
-        return None
+    return None
 
 def should_replace_title(title):
-    """
-    Check karta hai ki kya Title badalne ki zarurat hai.
-    Agar title filename jaisa dikhta hai to True return karega.
-    """
-    # 1. Agar title bahut chhota hai
-    if len(title) < 5:
+    if len(title) < 5 or "untitled" in title.lower() or "upload" in title.lower():
         return True
-    
-    # 2. Agar title mein 'Untitled' ya 'Upload' word hai
-    if "untitled" in title.lower() or "upload" in title.lower():
+    if " " not in title or re.search(r'\d{4}-\d{2}-\d{2}', title):
         return True
-        
-    # 3. Agar title mein Spaces nahi hain (e.g., VID_20250207) -> Filename hai
-    if " " not in title:
-        return True
-        
-    # 4. Agar title mein Date format hai (e.g., 2025-02-07)
-    if re.search(r'\d{4}-\d{2}-\d{2}', title):
-        return True
-        
     return False
 
-def send_telegram_alert(video_id, channel_name):
-    """
-    Telegram Message Format:
-    Channel Name (Big Red)
-    Message
-    Category
-    Link
-    """
+def send_telegram_alert(video_id, channel_name, new_title):
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     
@@ -112,15 +88,13 @@ def send_telegram_alert(video_id, channel_name):
         return
 
     video_link = f"https://youtu.be/{video_id}"
-    
-    # Red & Bold Simulation using Emoji and HTML
-    formatted_name = f"<b>🔴 {channel_name.upper()} 🔴</b>"
+    formatted_name = f"<b>🟢 {channel_name.upper()} 🟢</b>"
 
     message = (
-        f"{formatted_name}\n"
-        f"Message: Upload Successful\n"
-        f"Category: Education\n"
-        f"{video_link}"
+        f"{formatted_name}\n\n"
+        f"<b>Title:</b> {new_title}\n"
+        f"<b>Status:</b> Uploaded & Public\n"
+        f"<b>Link:</b> {video_link}"
     )
     
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
@@ -130,29 +104,22 @@ def send_telegram_alert(video_id, channel_name):
         'parse_mode': 'HTML',
         'disable_web_page_preview': False
     }
-    
     requests.post(url, json=payload)
+
 def main():
     try:
         print(f"--- STARTING AUTOMATION ---")
         youtube = get_youtube_service()
         
-        # 1. Connect to Channel & Get Uploads Playlist
-        channel_response = youtube.channels().list(
-            part="snippet,contentDetails",
-            mine=True
-        ).execute()
-        
+        # 1. Connect to Channel & Get Uploads
+        channel_response = youtube.channels().list(part="snippet,contentDetails", mine=True).execute()
         uploads_playlist_id = channel_response["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
-        print(f"✅ Channel Connected: {channel_response['items'][0]['snippet']['title']}")
+        print(f"✅ Connected to Channel")
 
-        # 2. Get Recent Videos (Includes Private/Unlisted)
-        playlist_request = youtube.playlistItems().list(
-            part="contentDetails",
-            playlistId=uploads_playlist_id,
-            maxResults=10  
-        )
-        playlist_response = playlist_request.execute()
+        # 2. Get Recent Videos
+        playlist_response = youtube.playlistItems().list(
+            part="contentDetails", playlistId=uploads_playlist_id, maxResults=10
+        ).execute()
         
         target_video_id = None
         target_video_snippet = None
@@ -160,15 +127,9 @@ def main():
         # 3. Find Unlisted/Private Video
         for item in playlist_response.get("items", []):
             vid_id = item["contentDetails"]["videoId"]
+            vid_response = youtube.videos().list(part="snippet,status", id=vid_id).execute()
             
-            vid_request = youtube.videos().list(
-                part="snippet,status",
-                id=vid_id
-            )
-            vid_response = vid_request.execute()
-            
-            if not vid_response["items"]:
-                continue
+            if not vid_response["items"]: continue
                 
             video_data = vid_response["items"][0]
             privacy = video_data["status"]["privacyStatus"]
@@ -186,58 +147,32 @@ def main():
         vid_id = target_video_id
         snippet = target_video_snippet
         
-        # --- AI & CONTENT LOGIC ---
-        
-        # A) TITLE GENERATION
+        # A) TITLE LOGIC
         current_title = snippet["title"]
         new_title = current_title
         
         if should_replace_title(current_title):
-            print("Generating new AI Title...")
             ai_title = ask_pollinations_ai(CONFIG["title_prompt"])
             if ai_title:
                 new_title = ai_title.replace('"', '').replace("'", "")
                 if len(new_title) > 70: new_title = new_title[:67] + "..."
-        else:
-            print("Keeping existing title.")
         
-        # B) DESCRIPTION GENERATION
-        print("AI Writing Description...")
-        ai_desc = ask_pollinations_ai(CONFIG["desc_prompt"])
-        if not ai_desc:
-            ai_desc = "Motivational video."
-            
-        final_description = f"{ai_desc}\n\n{CONFIG['seo_hashtags']}"
+        # B) DESCRIPTION LOGIC (From File)
+        print("Selecting random description from file...")
+        random_desc = get_random_description()
+        final_description = f"{random_desc}\n\n{CONFIG['seo_hashtags']}"
         
-        # C) TAGS LOGIC (SMART FIX)
-        raw_tags = CONFIG["tags"]
-        final_tags = []
+        # C) TAGS LOGIC
+        final_tags = list(set(CONFIG["tags"]))[:30]
 
-        # Check: Agar tags ek hi string mein hain (space separated)
-        if len(raw_tags) == 1 and " " in raw_tags[0]:
-            # String ko tod kar list banao aur '#' hatao
-            print("Fixing Tags format automatically...")
-            final_tags = [t.replace("#", "") for t in raw_tags[0].split() if t.strip()]
-        else:
-            final_tags = raw_tags
-
-        # Ensure Minimum Tags
-        if len(final_tags) < 8:
-            final_tags.extend(["Viral", "Trending", "Must Watch", "New Video", "Shorts"])
-
-        # Remove Duplicates & Limit to 30 tags
-        final_tags = list(set(final_tags))[:30]
-        print(f"Total Tags to Add: {len(final_tags)}")
-
-        # --- UPDATE VIDEO ---
-        
+        # UPDATE VIDEO
         update_body = {
             "id": vid_id,
             "snippet": {
                 "categoryId": CONFIG["category_id"],
                 "title": new_title,
                 "description": final_description,
-                "tags": final_tags,  # Ab yahan poori list jayegi
+                "tags": final_tags,
                 "channelTitle": snippet["channelTitle"]
             },
             "status": {
@@ -248,16 +183,10 @@ def main():
             }
         }
         
-        youtube.videos().update(
-            part="snippet,status",
-            body=update_body
-        ).execute()
-        
+        youtube.videos().update(part="snippet,status", body=update_body).execute()
         print(f"SUCCESS: Video Public | Title: {new_title}")
         
-        # Telegram Alert
-        display_name = snippet["channelTitle"] if snippet["channelTitle"] else CHANNEL_CUSTOM_NAME
-        send_telegram_alert(vid_id, display_name)
+        send_telegram_alert(vid_id, CHANNEL_CUSTOM_NAME, new_title)
 
     except Exception as e:
         print(f"CRITICAL ERROR: {e}")
