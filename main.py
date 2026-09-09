@@ -221,18 +221,19 @@ def main():
             print("No Unlisted/Private videos found.")
             return
 
-        # 1. PROCESS TITLE
+        # 1. PROCESS TITLE (Always force change)
         current_title = target_video_snippet["title"]
-        new_title = current_title
+        print(f"Old Title was: {current_title}")
         
-        if should_replace_title(current_title):
-            file_title = get_cooldown_title(history_data)
-            if file_title: 
-                new_title = file_title
-            else:
-                ai_title = ask_pollinations_ai(CONFIG["title_prompt"])
-                if ai_title: new_title = ai_title
-            new_title = new_title.replace('"', '').replace("'", "")[:67]
+        file_title = get_cooldown_title(history_data)
+        if file_title: 
+            new_title = file_title
+        else:
+            print("Title text file empty/cooldown, using AI...")
+            ai_title = ask_pollinations_ai(CONFIG["title_prompt"])
+            new_title = ai_title if ai_title else current_title
+            
+        new_title = new_title.replace('"', '').replace("'", "")[:67]
 
         # 2. PROCESS DESCRIPTION & HASHTAGS
         random_desc = get_cooldown_description(history_data)
