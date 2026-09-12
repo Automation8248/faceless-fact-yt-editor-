@@ -27,23 +27,19 @@ HISTORY_FILE = "history.json"
 # ==========================================
 
 def load_history():
-    """Load history file to check what has been used."""
     if os.path.exists(HISTORY_FILE):
         try:
-            with open(HISTORY_FILE, "r") as f:
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             pass
-    # Default structure if file doesn't exist
     return {"titles": {}, "descriptions": {}, "hashtags": {}, "tags": {}}
 
 def save_history(history):
-    """Save the updated history back to the JSON file."""
-    with open(HISTORY_FILE, "w") as f:
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(history, f, indent=4)
 
 def filter_available(items, history_category):
-    """Filter out items that are currently in the 30-day cooldown period."""
     now = datetime.now()
     available_items = []
     
@@ -51,7 +47,6 @@ def filter_available(items, history_category):
         last_used_str = history_category.get(item)
         if last_used_str:
             last_used_date = datetime.fromisoformat(last_used_str)
-            # Agar last use kiye hue time ko 30 din nahi huye hain, toh skip karo
             if now - last_used_date < timedelta(days=CONFIG["cooldown_days"]):
                 continue
         available_items.append(item)
@@ -59,7 +54,6 @@ def filter_available(items, history_category):
     return available_items
 
 def record_usage(history_category, items_used):
-    """Mark selected items with current date & time."""
     now_str = datetime.now().isoformat()
     if isinstance(items_used, str):
         items_used = [items_used]
@@ -74,12 +68,10 @@ def get_cooldown_title(history):
     try:
         with open("title.txt", "r", encoding="utf-8") as file:
             all_titles = [line.strip() for line in file.readlines() if line.strip()]
-            
             available_titles = filter_available(all_titles, history["titles"])
             
-            # Agar saare titles cooldown me hain, toh list reset kar do (fallback)
             if not available_titles and all_titles:
-                print("All titles are on cooldown. Reusing an old title.")
+                print("All titles on cooldown. Reusing an old title.")
                 available_titles = all_titles
                 
             if available_titles:
@@ -95,7 +87,6 @@ def get_cooldown_description(history):
         with open("description.txt", "r", encoding="utf-8") as file:
             content = file.read()
             all_desc = [d.strip() for d in content.split('---') if d.strip()]
-            
             available_desc = filter_available(all_desc, history["descriptions"])
             
             if not available_desc and all_desc:
@@ -114,18 +105,13 @@ def get_cooldown_hashtags(history):
         with open("hashtag.txt", "r", encoding="utf-8") as file:
             content = file.read()
             words = content.split()
-            all_hashtags = [w if w.startswith('#') else f'#{w}' for w in words if w.strip()]
-            
-            # Remove duplicates from source list
-            all_hashtags = list(set(all_hashtags))
+            all_hashtags = list(set([w if w.startswith('#') else f'#{w}' for w in words if w.strip()]))
             available_hashtags = filter_available(all_hashtags, history["hashtags"])
             
-            # Humein exactly 5 hashtags chahiye. Agar fresh 5 nahi hain, toh purane mix kar lenge
             if len(available_hashtags) < 5:
                 available_hashtags = list(set(available_hashtags + all_hashtags))
                 
             if available_hashtags:
-                # Select up to 5 random hashtags
                 chosen = random.sample(available_hashtags, min(5, len(available_hashtags)))
                 record_usage(history["hashtags"], chosen)
                 return " ".join(chosen)
@@ -141,30 +127,23 @@ def get_cooldown_tags(history):
             clean_tags = []
             
             for t in raw_tags:
-                # 1. Clean the tag (remove #, quotes, brackets, etc.)
                 cleaned = re.sub(r'[^a-zA-Z0-9\s-]', '', t).strip()
-                
-                # 2. STRICT YOUTUBE RULES: Tag cannot be empty ("") AND cannot be over 30 characters
                 if len(cleaned) > 0 and len(cleaned) <= 30:
                     clean_tags.append(cleaned)
 
-            # Remove duplicates
             all_tags = list(set(clean_tags))
-            
-            # Apply 30-day cooldown filter
             available_tags = filter_available(all_tags, history["tags"])
             
             if len(available_tags) < 5: 
-                available_tags = all_tags # Fallback if everything is on cooldown
+                available_tags = all_tags 
                 
             if available_tags:
                 random.shuffle(available_tags)
                 chosen = []
                 total_chars = 0
                 
-                # 3. STRICT YOUTUBE RULES: Total characters of all tags combined must be < 500
                 for tag in available_tags:
-                    if total_chars + len(tag) + 1 > 450: # Using 450 to be extra safe
+                    if total_chars + len(tag) + 1 > 450:
                         break
                     chosen.append(tag)
                     total_chars += len(tag) + 1
@@ -173,7 +152,6 @@ def get_cooldown_tags(history):
                 return chosen
     except FileNotFoundError:
         pass
-    
     return CONFIG["fallback_tags"]
 
 # ==========================================
@@ -208,7 +186,6 @@ def should_replace_title(title):
     return False
 
 def send_telegram_alert(video_id, channel_name, new_title):
-    # Using TELEGRAM_TOKEN as configured
     bot_token = os.environ.get("TELEGRAM_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     if not bot_token or not chat_id: return
@@ -245,7 +222,7 @@ def main():
             print("No Unlisted/Private videos found.")
             return
 
-        # 1. PROCESS TITLE (Always force change)
+        # 1. PROCESS TITLE (Forced change implementation)
         current_title = target_video_snippet["title"]
         print(f"Old Title was: {current_title}")
         
@@ -264,44 +241,36 @@ def main():
         five_hashtags = get_cooldown_hashtags(history_data)
         final_description = f"{random_desc}\n\n{five_hashtags}"
         
-        # 3. PROCESS TAGS
-        # --- 3. TAGS LOGIC ---
-    raw_tags = get_cooldown_tags(history_data)
-    
-    # NUCLEAR FAILSAFE: Strip all JSON garbage and force length limits
-    safe_tags = []
-    total_len = 0
-    
-    for t in raw_tags:
-        # Remove all JSON brackets, quotes, and colons
-        clean_tag = re.sub(r'[{}\[\]":]', '', str(t)).strip()
-        # Enforce max 30 chars per tag
-        clean_tag = clean_tag[:30] 
+        # 3. PROCESS TAGS (With Nuclear Failsafe)
+        raw_tags = get_cooldown_tags(history_data)
+        safe_tags = []
+        total_len = 0
         
-        if clean_tag and (total_len + len(clean_tag) < 400):
-            safe_tags.append(clean_tag)
-            total_len += len(clean_tag)
+        for t in raw_tags:
+            clean_tag = re.sub(r'[{}\[\]":]', '', str(t)).strip()
+            clean_tag = clean_tag[:30] 
             
-    # If it completely fails, use safe defaults
-    final_tags = safe_tags if safe_tags else ["facts", "shorts", "viral"]
-    
-    print(f"🔥 DEBUG - Final Tags being sent: {final_tags}")
+            if clean_tag and (total_len + len(clean_tag) < 400):
+                safe_tags.append(clean_tag)
+                total_len += len(clean_tag)
+                
+        final_tags = safe_tags if safe_tags else ["facts", "shorts", "viral"]
+        print(f"🔥 DEBUG - Final Tags being sent: {final_tags}")
 
-    # --- UPDATE VIDEO ---
-    update_body = {
-        "id": target_video_id,
-        "snippet": {
-            "categoryId": CONFIG["category_id"],
-            "title": new_title,
-            "description": final_description,
-            "tags": final_tags,
-            "channelTitle": target_video_snippet["channelTitle"]
-        },
-        "status": {
-            "privacyStatus": "public",
-            "embeddable": True
-        }
-    }
+        # 4. UPDATE YOUTUBE
+        youtube.videos().update(
+            part="snippet,status",
+            body={
+                "id": target_video_id,
+                "snippet": {
+                    "categoryId": CONFIG["category_id"],
+                    "title": new_title,
+                    "description": final_description,
+                    "tags": final_tags,
+                    "channelTitle": target_video_snippet["channelTitle"]
+                },
+                "status": {"privacyStatus": "public", "embeddable": True}
+            }
         ).execute()
         
         print(f"SUCCESS: Video Public | Title: {new_title}")
