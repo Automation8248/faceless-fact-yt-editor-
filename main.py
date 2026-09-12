@@ -265,22 +265,43 @@ def main():
         final_description = f"{random_desc}\n\n{five_hashtags}"
         
         # 3. PROCESS TAGS
-        final_tags = get_cooldown_tags(history_data)
+        # --- 3. TAGS LOGIC ---
+    raw_tags = get_cooldown_tags(history_data)
+    
+    # NUCLEAR FAILSAFE: Strip all JSON garbage and force length limits
+    safe_tags = []
+    total_len = 0
+    
+    for t in raw_tags:
+        # Remove all JSON brackets, quotes, and colons
+        clean_tag = re.sub(r'[{}\[\]":]', '', str(t)).strip()
+        # Enforce max 30 chars per tag
+        clean_tag = clean_tag[:30] 
+        
+        if clean_tag and (total_len + len(clean_tag) < 400):
+            safe_tags.append(clean_tag)
+            total_len += len(clean_tag)
+            
+    # If it completely fails, use safe defaults
+    final_tags = safe_tags if safe_tags else ["facts", "shorts", "viral"]
+    
+    print(f"🔥 DEBUG - Final Tags being sent: {final_tags}")
 
-        # 4. UPDATE YOUTUBE
-        youtube.videos().update(
-            part="snippet,status",
-            body={
-                "id": target_video_id,
-                "snippet": {
-                    "categoryId": CONFIG["category_id"],
-                    "title": new_title,
-                    "description": final_description,
-                    "tags": final_tags,
-                    "channelTitle": target_video_snippet["channelTitle"]
-                },
-                "status": {"privacyStatus": "public", "embeddable": True}
-            }
+    # --- UPDATE VIDEO ---
+    update_body = {
+        "id": target_video_id,
+        "snippet": {
+            "categoryId": CONFIG["category_id"],
+            "title": new_title,
+            "description": final_description,
+            "tags": final_tags,
+            "channelTitle": target_video_snippet["channelTitle"]
+        },
+        "status": {
+            "privacyStatus": "public",
+            "embeddable": True
+        }
+    }
         ).execute()
         
         print(f"SUCCESS: Video Public | Title: {new_title}")
