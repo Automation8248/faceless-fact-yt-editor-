@@ -137,23 +137,34 @@ def get_cooldown_tags(history):
     try:
         with open("tag.txt", "r", encoding="utf-8") as file:
             content = file.read().replace('\n', ',')
-            # Remove any special characters that might break YouTube tags
-            all_tags = list(set([re.sub(r'[^a-zA-Z0-9\s-]', '', t.strip()) for t in content.split(',') if t.strip()]))
+            raw_tags = content.split(',')
+            clean_tags = []
             
+            for t in raw_tags:
+                # 1. Clean the tag (remove #, quotes, brackets, etc.)
+                cleaned = re.sub(r'[^a-zA-Z0-9\s-]', '', t).strip()
+                
+                # 2. STRICT YOUTUBE RULES: Tag cannot be empty ("") AND cannot be over 30 characters
+                if len(cleaned) > 0 and len(cleaned) <= 30:
+                    clean_tags.append(cleaned)
+
+            # Remove duplicates
+            all_tags = list(set(clean_tags))
+            
+            # Apply 30-day cooldown filter
             available_tags = filter_available(all_tags, history["tags"])
             
             if len(available_tags) < 5: 
-                available_tags = all_tags # Fallback
+                available_tags = all_tags # Fallback if everything is on cooldown
                 
             if available_tags:
                 random.shuffle(available_tags)
                 chosen = []
                 total_chars = 0
                 
-                # YouTube limit is 500 chars total. We use 450 to be completely safe.
+                # 3. STRICT YOUTUBE RULES: Total characters of all tags combined must be < 500
                 for tag in available_tags:
-                    # length of tag + 1 for the comma separator
-                    if total_chars + len(tag) + 1 > 450:
+                    if total_chars + len(tag) + 1 > 450: # Using 450 to be extra safe
                         break
                     chosen.append(tag)
                     total_chars += len(tag) + 1
@@ -162,6 +173,7 @@ def get_cooldown_tags(history):
                 return chosen
     except FileNotFoundError:
         pass
+    
     return CONFIG["fallback_tags"]
 
 # ==========================================
