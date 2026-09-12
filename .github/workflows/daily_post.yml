@@ -2,12 +2,12 @@ name: YT Facts Auto Publisher
 
 on:
   schedule:
-    # Yeh timer har 1 ghante mein run hoga (Minute 0 par)
+    # Runs exactly at minute 0 of every hour, every day
     - cron: '0 * * * *'
-  workflow_dispatch: # Button se manually run karne ke liye
+  workflow_dispatch:
 
 permissions:
-  contents: write # 👈 IMPORTANT: Yeh permission bot ko history.json wapas repo me save karne deti hai
+  contents: write
 
 jobs:
   publish_video:
@@ -17,7 +17,7 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0 # Pushing back ke liye full history fetch karta hai
+        fetch-depth: 0
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -31,7 +31,6 @@ jobs:
 
     - name: Run Automation Script
       env:
-        # Apne GitHub repository ke Secrets mein yeh sabhi keys add karein
         YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
         YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
         YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
@@ -43,12 +42,6 @@ jobs:
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        
-        # history.json ko stage karein
         git add history.json
-        
-        # Agar file me koi naya change (naya video upload) hua hai tabhi commit karega
         git commit -m "Update history.json with new cooldowns [skip ci]" || echo "No changes to commit"
-        
-        # Wapas repository me push karein
         git push
