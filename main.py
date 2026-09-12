@@ -137,7 +137,8 @@ def get_cooldown_tags(history):
     try:
         with open("tag.txt", "r", encoding="utf-8") as file:
             content = file.read().replace('\n', ',')
-            all_tags = list(set([t.strip() for t in content.split(',') if t.strip()]))
+            # Remove any special characters that might break YouTube tags
+            all_tags = list(set([re.sub(r'[^a-zA-Z0-9\s-]', '', t.strip()) for t in content.split(',') if t.strip()]))
             
             available_tags = filter_available(all_tags, history["tags"])
             
@@ -145,7 +146,18 @@ def get_cooldown_tags(history):
                 available_tags = all_tags # Fallback
                 
             if available_tags:
-                chosen = random.sample(available_tags, min(30, len(available_tags)))
+                random.shuffle(available_tags)
+                chosen = []
+                total_chars = 0
+                
+                # YouTube limit is 500 chars total. We use 450 to be completely safe.
+                for tag in available_tags:
+                    # length of tag + 1 for the comma separator
+                    if total_chars + len(tag) + 1 > 450:
+                        break
+                    chosen.append(tag)
+                    total_chars += len(tag) + 1
+                    
                 record_usage(history["tags"], chosen)
                 return chosen
     except FileNotFoundError:
